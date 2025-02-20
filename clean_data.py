@@ -1,5 +1,5 @@
 import pandas as pd
-import re
+import re  # Make sure this is imported for regex in is_valid_iso()
 
 def clean_film_data(input_file, output_file, invalid_file):
     """
@@ -20,16 +20,61 @@ def clean_film_data(input_file, output_file, invalid_file):
     def is_valid(value):
         if pd.isna(value) or value == "" or value == "*see notes*":
             return False
-        # Check for parentheses in ASA/ISO values
+        return True
+    
+    # Define a function specifically for ISO validation
+    def is_valid_iso(value):
+        if not is_valid(value):
+            return False
+        # Check for parentheses in ASA/ISO values only
         if isinstance(value, str) and ('(' in value or ')' in value):
             return False
-        return True
+        
+        # Make sure ISO value is a valid number or range of numbers
+        if isinstance(value, (int, float)):
+            return True
+            
+        # Handle string values
+        if isinstance(value, str):
+            # First remove all spaces
+            cleaned_value = value.strip()
+            
+            # Check for invalid characters (anything not numeric or hyphen)
+            # This will catch question marks, letters, etc.
+            if re.search(r'[^\d\-\.]', cleaned_value):
+                return False
+                
+            # If it's a range with exactly one hyphen, check each part
+            if '-' in cleaned_value:
+                parts = cleaned_value.split('-')
+                if len(parts) != 2:
+                    return False  # More than one hyphen or empty part
+                
+                # Check each part of the range
+                for part in parts:
+                    part = part.strip()
+                    if not part:  # Empty part
+                        return False
+                    try:
+                        _ = float(part)
+                    except ValueError:
+                        return False
+                return True
+            else:
+                # For single values, try to convert to float
+                try:
+                    _ = float(cleaned_value)
+                    return True
+                except ValueError:
+                    return False
+                    
+        return False
     
     # Create validity mask for each criteria
     film_valid = df['Film'].apply(is_valid)
     developer_valid = df['Developer'].apply(is_valid)
     dilution_valid = df['Dilution'].apply(is_valid)
-    iso_valid = df['ASA/ISO'].apply(is_valid)
+    iso_valid = df['ASA/ISO'].apply(is_valid_iso)  # Using the ISO-specific validation
     format_valid = (df['35mm'].apply(is_valid) | df['120'].apply(is_valid) | df['Sheet'].apply(is_valid))
     temp_valid = df['Temp'].apply(is_valid)
     
@@ -235,7 +280,12 @@ def clean_film_data(input_file, output_file, invalid_file):
     
     valid_rows = valid_rows.drop(columns=columns_to_drop)
     
-    # Save cleaned data and invalid data
+    # Deduplicate valid rows
+    original_valid_count = len(valid_rows)
+    valid_rows = valid_rows.drop_duplicates()
+    deduplicated_count = original_valid_count - len(valid_rows)
+    
+    # Save cleaned, deduplicated data and invalid data
     valid_rows.to_csv(output_file, index=False)
     invalid_rows.to_csv(invalid_file, index=False)
     
@@ -243,6 +293,7 @@ def clean_film_data(input_file, output_file, invalid_file):
         'original_rows': len(df),
         'valid_rows': len(valid_rows),
         'invalid_rows': len(invalid_rows),
+        'duplicates_removed': deduplicated_count,
         'percent_kept': round(len(valid_rows) / len(df) * 100, 1)
     }
 
@@ -255,4 +306,5 @@ if __name__ == "__main__":
     print(f"Original dataset: {results['original_rows']} rows")
     print(f"Cleaned dataset: {results['valid_rows']} rows")
     print(f"Invalid data: {results['invalid_rows']} rows")
+    print(f"Duplicates removed: {results['duplicates_removed']} rows")
     print(f"Kept {results['percent_kept']}% of the original data")
