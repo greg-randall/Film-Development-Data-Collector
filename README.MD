@@ -47,6 +47,8 @@ Extracts structured data from the downloaded HTML pages.
 
 Processes the raw scraped data into a clean, standardized format.
 
+Do note, duplicates are expected, we are collecting records using both developer name and film name which will point to the same record so 50% duplication is expected. 
+
 **Features:**
 - Validates entries based on multiple criteria
 - Standardizes temperature values to Celsius
